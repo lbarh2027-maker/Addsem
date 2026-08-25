@@ -1,7 +1,7 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: "/addsem/",
+  base: "/Addsem/",
   build: {
     rollupOptions: {
       output: {
