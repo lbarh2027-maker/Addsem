@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { MotionPathPlugin } from "gsap/MotionPathPlugin";
 
-gsap.registerPlugin(ScrollTrigger);
+gsap.registerPlugin(ScrollTrigger, MotionPathPlugin);
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -65,6 +66,62 @@ const material = new THREE.PointsMaterial({
 
 const points = new THREE.Points(geometry, material);
 scene.add(points);
+
+/* ===================== HERO PRODUCT OBJECT ===================== */
+/* A single dramatically-lit "ad card" as the hero's subject, echoing the
+   product-render treatment from the reference (one object, studio light,
+   dark ground) rather than pure ambient particles. */
+
+const cardGroup = new THREE.Group();
+cardGroup.position.set(2.2, 0, -1);
+scene.add(cardGroup);
+
+const cardBody = new THREE.Mesh(
+  new THREE.BoxGeometry(2.4, 3.2, 0.08, 4, 4, 1),
+  new THREE.MeshPhysicalMaterial({
+    color: 0x0d0d10,
+    metalness: 0.6,
+    roughness: 0.25,
+    clearcoat: 1,
+    clearcoatRoughness: 0.2,
+  })
+);
+cardGroup.add(cardBody);
+
+function makeScreenTexture() {
+  const c = document.createElement("canvas");
+  c.width = 512;
+  c.height = 683;
+  const ctx = c.getContext("2d");
+  const grad = ctx.createLinearGradient(0, 0, c.width, c.height);
+  grad.addColorStop(0, "#ff3d81");
+  grad.addColorStop(1, "#38e1ff");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.globalCompositeOperation = "overlay";
+  ctx.fillStyle = "rgba(0,0,0,0.25)";
+  for (let i = 0; i < 40; i++) {
+    ctx.fillRect(0, (c.height / 40) * i, c.width, c.height / 80);
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+const screen = new THREE.Mesh(
+  new THREE.PlaneGeometry(2.08, 2.88),
+  new THREE.MeshBasicMaterial({ map: makeScreenTexture(), toneMapped: false })
+);
+screen.position.set(0, 0, 0.045);
+cardGroup.add(screen);
+
+const keyLight = new THREE.PointLight(0xff3d81, 40, 20, 2);
+keyLight.position.set(-4, 3, 4);
+scene.add(keyLight);
+
+const rimLight = new THREE.PointLight(0x38e1ff, 30, 20, 2);
+rimLight.position.set(5, -2, -3);
+scene.add(rimLight);
+
+scene.add(new THREE.AmbientLight(0x1a1a1f, 1.2));
 
 /* Pointer tracking, projected onto the particle field's depth plane. */
 const pointer = new THREE.Vector2(-10, -10);
@@ -131,6 +188,15 @@ function animate() {
     points.rotation.y = t * 0.02 + scrollState.progress * 0.6;
   }
 
+  if (!reduceMotion) {
+    const tiltX = THREE.MathUtils.clamp(pointer.x, -1, 1);
+    const tiltY = THREE.MathUtils.clamp(pointer.y, -1, 1);
+    cardGroup.rotation.y = Math.sin(t * 0.35) * 0.35 + tiltX * 0.25;
+    cardGroup.rotation.x = tiltY * -0.12;
+  }
+  cardGroup.position.y = -scrollState.progress * 3.5;
+  cardGroup.visible = scrollState.progress < 0.35;
+
   camera.position.z = 9 - scrollState.progress * 2.5;
 
   renderer.render(scene, camera);
@@ -158,18 +224,64 @@ heroTl
   .to(".hero-copy", { opacity: 1, duration: 0.9 }, 0.6)
   .to(".hint", { opacity: 1, duration: 0.8 }, 1.1);
 
-gsap.utils.toArray(".cap-row").forEach((row) => {
-  gsap.to(row, {
+gsap.utils.toArray(".panel").forEach((panel, i) => {
+  gsap.to(panel, {
     opacity: 1,
     y: 0,
-    duration: 0.9,
+    duration: 0.8,
+    delay: i * 0.06,
     ease: "power3.out",
     scrollTrigger: {
-      trigger: row,
-      start: "top 82%",
+      trigger: panel,
+      start: "top 88%",
     },
   });
 });
+
+/* ===================== SCROLL DATA STORY ===================== */
+
+const storyPath = document.getElementById("storyPathDrawn");
+const storyLength = storyPath.getTotalLength();
+storyPath.style.strokeDasharray = `${storyLength}`;
+storyPath.style.strokeDashoffset = `${storyLength}`;
+
+const storyNumberEl = document.getElementById("storyNumber");
+const STORY_TARGET = 42800;
+const storyCounter = { value: 0 };
+
+gsap.timeline({
+  scrollTrigger: {
+    trigger: ".data-story",
+    start: "top top",
+    end: "+=120%",
+    scrub: 0.6,
+    pin: true,
+  },
+})
+  .to(storyPath, { strokeDashoffset: 0, ease: "none" }, 0)
+  .to(
+    "#storyMarker",
+    {
+      motionPath: {
+        path: "#storyPath",
+        align: "#storyPath",
+        alignOrigin: [0.5, 0.5],
+      },
+      ease: "none",
+    },
+    0
+  )
+  .to(
+    storyCounter,
+    {
+      value: STORY_TARGET,
+      ease: "none",
+      onUpdate: () => {
+        storyNumberEl.textContent = Math.round(storyCounter.value).toLocaleString("en-US");
+      },
+    },
+    0
+  );
 
 gsap.to(".manifesto-text", {
   opacity: 1,
